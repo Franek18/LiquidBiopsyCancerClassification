@@ -1,0 +1,9 @@
+xgboost~=1.4.0
+pandas~=1.2.4
+numpy~=1.20.2
+scikit-learn~=0.24.1
+matplotlib~=3.4.1
+torch==1.8.0
+torchvision==0.9.0
+opencv-python==4.5.1.48
+graphviz==0.16 #sudo apt-get install graphviz
