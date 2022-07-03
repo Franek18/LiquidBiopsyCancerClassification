@@ -27,14 +27,14 @@ N_JOBS = 7
 N_FOLDS = 5
 
 
-def main(reduced=True, col_group: Optional[str] = None, mixup: Optional[float] = None):
+def main(reduced=True, col_group: Optional[str] = None):
     KEGG.k.print_dataset_paths_info('main.main')
 
-    perform_exploration_training(reduced, col_group, mixup, 15)
+    perform_exploration_training(reduced, col_group, 15)
 
     # plot_importances_for_best(reduced, col_group)
 
-    # perform_importances_k_fold_test_training_for_best(reduced, col_group, None, np.arange(1, 501, 1))
+    # perform_importances_k_fold_test_training_for_best(reduced, col_group, np.arange(1, 501, 1))
         # [0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.3, 0.5, 1.0])#0.001, 0.005,
 
     # plot_roc_curve(reduced, col_group)
@@ -113,7 +113,7 @@ def get_start_string() -> str:
     return start_date.strftime("%d-%m-%Y_%H-%M-%S")
 
 
-def perform_exploration_training(reduced: bool, col_group: Optional[str], mixup: Optional[float], max_configs_to_test: int = 100):
+def perform_exploration_training(reduced: bool, col_group: Optional[str], max_configs_to_test: int = 100):
     start_str = get_start_string()
 
     X_train, y_train, X_test, y_test = load_data(reduced, col_group)
@@ -121,11 +121,10 @@ def perform_exploration_training(reduced: bool, col_group: Optional[str], mixup:
     param_grid = get_exploration_param_grid()
     params = select_max_random_params_configs(param_grid, max_configs_to_test)
     random.seed()
-    df_result = run_kfold_test_training(X_train, X_test, y_train, y_test, params, mixup)
+    df_result = run_kfold_test_training(X_train, X_test, y_train, y_test, params)
     result_filename = f"result_dataset_" \
                       f"{'reduced' if reduced else 'original'}_" \
                       f"group_{'all' if col_group is None else col_group}_" \
-                      f"mixup_{mixup}_" \
                       f"seed_{RANDOM_FOLD_SEED}_" \
                       f"{start_str}.csv"
     df_result.to_csv(os.path.join(ALL_RESULT_DIR, result_filename))
@@ -172,7 +171,7 @@ def plot_importances_for_best(reduced, col_group):
     plot_tree(classifier)
 
 
-def run_kfold_test_training(train_x, test_x, train_y, test_y, params_list, mixup: Optional[float]):
+def run_kfold_test_training(train_x, test_x, train_y, test_y, params_list):
     const_params = get_const_params(train_y, True)
     skf = StratifiedKFold(N_FOLDS, shuffle=True, random_state=RANDOM_FOLD_SEED)
 
@@ -221,9 +220,6 @@ def run_kfold_test_training(train_x, test_x, train_y, test_y, params_list, mixup
             y_train_fold = train_y[train_index]
             X_val_fold = train_x[val_index]
             y_val_fold = train_y[val_index]
-
-            if mixup is not None:
-                X_train_fold, y_train_fold = KEGG.apply_mixup_to_dataset(X_train_fold, y_train_fold, mixup)
 
             classifier = XGBClassifier(n_jobs=N_JOBS, use_label_encoder=False)
             classifier.set_params(**const_params)
@@ -345,7 +341,7 @@ def run_kfold_test_training(train_x, test_x, train_y, test_y, params_list, mixup
     return pd.DataFrame(result)
 
 
-def perform_importances_k_fold_test_training_for_best(reduced: bool, col_group: Optional[str], mixup: Optional[float], importance_thresholds: Iterable[Union[int, float]]):
+def perform_importances_k_fold_test_training_for_best(reduced: bool, col_group: Optional[str], importance_thresholds: Iterable[Union[int, float]]):
     start_str = get_start_string()
 
     X_train, y_train, X_test, y_test = load_data(reduced, col_group)
@@ -364,12 +360,11 @@ def perform_importances_k_fold_test_training_for_best(reduced: bool, col_group: 
         imp_X_train = KEGG.extract_most_important_features(X_train, importances, perc_threshold, feat_num_threshold)
         imp_X_test = KEGG.extract_most_important_features(X_test, importances, perc_threshold, feat_num_threshold)
 
-        df_result = run_kfold_test_training(imp_X_train, imp_X_test, y_train, y_test, params, mixup)
+        df_result = run_kfold_test_training(imp_X_train, imp_X_test, y_train, y_test, params)
         random.seed()
         result_filename = f"importance_training_result_dataset_" \
                           f"{'reduced' if reduced else 'original'}_" \
                           f"group_{'all' if col_group is None else col_group}_" \
-                          f"mixup_{mixup}_" \
                           f"seed_{RANDOM_FOLD_SEED}_" \
                           f"importance_{threshold}_" \
                           f"{start_str}.csv"
@@ -439,7 +434,7 @@ def extract_combined_features_num_vs_acc():
     combined = pd.read_csv(os.path.join(p, sorted(os.listdir(p))[-1]))
     extracted = combined.loc[:, ['mean_train_bal_acc', 'mean_test_bal_acc', 'mean_val_bal_acc', 'mean_train_roc_auc',
                                  'mean_test_roc_auc', 'mean_val_roc_auc', 'file']]
-    extracted['features_num'] = extracted['file'].apply(lambda filename: int(filename.split('_')[12]))
+    extracted['features_num'] = extracted['file'].apply(lambda filename: int(filename.split('_')[10]))
     del extracted['file']
     extracted = extracted.sort_values(by='features_num')
 
