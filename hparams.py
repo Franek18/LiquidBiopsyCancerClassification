@@ -15,14 +15,15 @@ hparams = {
                     "no_layers" : 34,
                     "pretrained": False,
                     "mixup": False,
-                    "mixup_alpha": 0.4
+                    "mixup_alpha": 0.4,
+                    "ES_tolerance": 10
                 },
                 # ResNet18 hparams
                 "ResNet18" : {
                     "Dropout": 0.2,
                     "lr" : 1e-1,
                     "weight_decay" : 0.0001,
-                    "num_of_epochs" : 100,
+                    "num_of_epochs" : 300,
                     "train_batch_size": 64,
                     "val_batch_size" : 64,
                     "step_size" : 7,
@@ -30,6 +31,7 @@ hparams = {
                     "no_layers" : 18,
                     "pretrained": False,
                     "mixup": False,
-                    "mixup_alpha": 0.4
+                    "mixup_alpha": 0.4,
+                    "ES_tolerance": 10
                 }
 }

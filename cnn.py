@@ -5,12 +5,14 @@ import numpy as np
 import torchvision.transforms as transforms
 
 from hparams import hparams
-from torchsummary import summary
-from cnn_training import kFoldTraining
-from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader
 from data import CancerDataset
-from annotate import annotateCancer
+from torchsummary import summary
+from annotate import annotateMultiClass
+from cnn_training import kFoldTraining
+from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
+
 
 def summaryModel(model, tensor_shape):
     '''
@@ -68,6 +70,40 @@ def load_indices(train_filename, test_filename):
 
     return train_indices, test_indices
 
+def split_multiclass_set(annotation_filename, train_filename, test_filename, other_filename="indices/other_indices.npy"):
+    '''
+    '''
+    train_indices = []
+    test_indices = []
+    other_indices = []
+    with open(annotation_filename, "r") as annotation_file:
+        annotation_reader = csv.DictReader(annotation_file, delimiter=',')
+        idx = 0
+        for row in annotation_reader:
+            if idx == 0:
+                idx += 1
+                continue
+
+            split_id = row["Split"]
+
+            if split_id == "Train":
+                train_indices.append(idx - 1)
+            elif split_id == "Test":
+                test_indices.append(idx - 1)
+            else:
+                other_indices.append(idx - 1)
+            idx += 1
+
+    train_indices = np.array(train_indices)
+    test_indices = np.array(test_indices)
+    other_indices = np.array(other_indices)
+
+    np.save(train_filename, train_indices)
+    np.save(test_filename, test_indices)
+    np.save(other_filename, other_indices)
+
+    return train_indices, test_indices, other_indices
+
 def train(train_filename, test_filename, result_filename, log_filename, write_mode, lr_list, Dropout_list, wd_list, no_folds = 5):
     '''
         Training of a model.
@@ -87,7 +123,7 @@ def train(train_filename, test_filename, result_filename, log_filename, write_mo
 
     # Type pathway to the directory with your data
     data_dir = ""
-    annotation_file = 'annotations/Cancer_annotations_mts.csv'
+    annotation_file = 'annotations/MultiClass_annotations_mts.csv'
     dataset_norm = CancerDataset(annotation_file, data_dir)
     # normalization of data
     mean, std, labels = get_mean_std_labels(dataset_norm)
@@ -101,9 +137,10 @@ def train(train_filename, test_filename, result_filename, log_filename, write_mo
     test_indices = None
 
     if not os.path.exists(train_filename):
-        indices = np.arange(len(labels))
-        train_indices, test_indices = train_test_split(indices, test_size=0.3, stratify=labels)
-        save_indices(train_filename, test_filename, train_indices, test_indices)
+        # indices = np.arange(len(labels))
+        # train_indices, test_indices = train_test_split(indices, test_size=0.3, stratify=labels)
+        # save_indices(train_filename, test_filename, train_indices, test_indices)
+        train_indices, test_indices, other_indices = split_multiclass_set(annotation_file, train_filename, test_filename)
     else:
         train_indices, test_indices = load_indices(train_filename, test_filename)
 
@@ -116,11 +153,8 @@ def train(train_filename, test_filename, result_filename, log_filename, write_mo
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True)
 
     # Count class wieghts
-    no_zero_class = labels.count(0)
-    no_one_class = labels.count(1)
-
-    one_weight = no_zero_class / no_one_class
-    class_weights = torch.Tensor([1, one_weight])
+    weights = compute_class_weight(class_weight = 'balanced', classes = [0, 1, 2, 3, 4, 5, 6], y = labels)
+    class_weights = torch.Tensor(weights)
 
     # Open the file for results
     result_file = open(result_filename, write_mode)
@@ -165,7 +199,7 @@ def train(train_filename, test_filename, result_filename, log_filename, write_mo
                     log_file.write("weight_decay = {}\n".format(wd))
                     log_file.write("++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n")
 
-                    kFoldTraining(log_file, no_folds, writer, y_train, train_dataset, test_dataloader, test_indices, class_weights, hparams[name])
+                    kFoldTraining(log_file, no_folds, writer, y_train, train_dataset, test_dataloader, test_indices, class_weights, hparams[name], no_classes=7)
 
     result_file.close()
     log_file.close()
@@ -183,19 +217,19 @@ def main():
     if not os.path.exists('indices'):
         os.makedirs('indices')
 
-    if not os.path.exists('annotations/Cancer_annotations_mts.csv'):
-        annotateCancer()
+    if not os.path.exists('annotations/MultiClass_annotations_mts.csv'):
+        annotateMultiClass()
 
     #lr_list = np.logspace(-1, -3, 10)
     # hyperparameters
-    lr_list = [0.1]
-    Dropout_list = [0.2]
+    lr_list = [0.001]
+    Dropout_list = [0.4]
     wd_list = [1e-3]
 
     train_filename = "indices/train_indices.npy"
     test_filename = "indices/test_indices.npy"
-    result_file = "results/D_02_Repeat3_C-NC_ResNet18_AUC_soft.csv"
-    log_file = "logs/D_02_Repeat3_C-NC_ResNet18_AUC_soft.txt"
+    result_file = "results/Multiclass_lr001_dr04_wd001.csv"
+    log_file = "logs/Multiclass_lr001_dr04_wd001.txt"
     write_mode = "w"
 
     for i in range(3):
